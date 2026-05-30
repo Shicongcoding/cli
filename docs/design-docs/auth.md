@@ -94,7 +94,7 @@ wps365-cli auth token            # 输出 access token（供 curl 等外部工�
 wps365-cli auth refresh --delegated   # 手动刷新 delegated token
 wps365-cli auth refresh --app         # 手动刷新 app token
 wps365-cli auth logout           # 删除 token（保留凭证，可直接重新 login）
-wps365-cli auth clean --force    # 清除所有 token、凭证和自动密钥（完全重置）
+wps365-cli auth clean    # 清除所有 token、凭证和自动密钥（完全重置，交互确认）
 ```
 
 ## 命令与认证模式映射
@@ -106,6 +106,23 @@ wps365-cli auth clean --force    # 清除所有 token、凭证和自动密钥（
 - 同时声明两者时，优先 delegated，`--token-type` 可覆盖
 
 不匹配时 CLI 直接报错，不静默切换模式。这确保用户明确知道当前操作使用的身份。
+
+## 常用 Scope 参考
+
+| 业务域 | 常用 Scope | 说明 |
+|--------|-----------|------|
+| 用户 | `kso.user_base.read` | 读取当前用户基本信息 |
+| 日历 | `kso.calendar.read` | 读取日历和日程 |
+| 日历 | `kso.calendar.write` | 创建/修改/删除日程 |
+| 即时通讯 | `kso.chat.message.read` | 读取消息 |
+| 即时通讯 | `kso.chat.message.write` | 发送消息 |
+| 通讯录 | `kso.contact.user.read` | 读取通讯录用户信息 |
+| 云文档 | `kso.drive.file.read` | 读取云文档 |
+| 云文档 | `kso.drive.file.write` | 上传/修改云文档 |
+| 多维表 | `kso.dbsheet.read` | 读取多维表 |
+| 邮箱 | `kso.mail.read` | 读取邮件 |
+
+> 完整 Scope 列表和权限申请方式请参考 [前置准备](../prerequisites.md) 和 WPS 365 开放平台开发者后台。
 
 ## 安全考量
 
