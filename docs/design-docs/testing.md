@@ -208,6 +208,8 @@ jobs:
             | jq -e '.method == "GET" and (.path == "/v7/users/current")'
 ```
 
+`jq -e` 标志使 jq 在表达式结果为 `false` 或 `null` 时以 exit 1 退出，搭配 `set -e` 可实现断言效果——表达式为真则继续，为假则中断流水线。
+
 ## 文档贡献的测试
 
 本仓库当前主要接受文档贡献。文档测试的重点是：
