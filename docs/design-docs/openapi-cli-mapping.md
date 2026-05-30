@@ -41,7 +41,7 @@ OpenAPI path parameters `{calendar_id}`, `{event_id}` become positional CLI args
 | `{drive_id}` | `drive-id` | 1st |
 | `{file_id}` | `file-id` | 2nd |
 
-Naming: kebab-case, strip the `_id` suffix only when the resource name already implies it (e.g., `calendar-id` not `calendar-id-id`).
+Naming: always use `{resource}-id` format in kebab-case (e.g., `calendar-id`, `file-id`). Do not strip the `-id` suffix even when the resource name implies it — consistency across all commands is more important than brevity.
 
 ### Rule 3: Verb Normalization
 
@@ -231,7 +231,7 @@ The table below summarizes path-to-command mapping patterns across all 7 domains
 | Action verb | 20 | `meeting end`, `im messages recall` |
 | **Total** | **152** | |
 
-Unmapped paths (649) are accessible via `api get|post`.
+~649 paths are accessible only via `api get|post` (some curated commands share the same path with different method/auth, so the exact count varies by dedup method).
 
 ## Comparison with Slock CLI (kscc)
 
@@ -241,7 +241,7 @@ kscc does not use a spec-driven mapping system. Its commands are defined in Type
 |--------|-----------|------|
 | Mapping source | Declarative YAML → runtime resolver | Imperative code |
 | Adding commands | Edit spec YAML + restart | Write command module |
-| API coverage | 152 curated + 649 raw | 20 commands, no raw fallback |
+| API coverage | 152 curated + ~649 raw | 20 commands, no raw fallback |
 | Body mapping | `bindings` + `transforms` | `zod` schema parsing |
 | Auth validation | Spec-driven per-command | Global middleware |
 | Agent integration | `--dry-run` + `-o json` | MCP protocol + hooks |

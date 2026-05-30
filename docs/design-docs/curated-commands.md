@@ -31,21 +31,23 @@ Curated commands are not a separate API layer — they resolve to the same HTTP 
 Each curated command is defined in a YAML spec (`spec/curated/365.yaml`) with this structure:
 
 ```yaml
-- id: calendar.events.create        # Unique dot-separated identifier
-  command: calendar events create    # CLI invocation path
-  summary: 创建日程                   # One-line description
-  description: ...                   # Extended help text
-  method: POST                       # HTTP method
-  path: /v7/calendars/{calendar_id}/events/create
-  request_schema_ref: "#/components/schemas/..."   # OpenAPI schema ref
-  response_schema_ref: "#/components/schemas/..."   # OpenAPI schema ref
-  args:                              # Positional arguments
-  flags:                             # Named flags
-  headers:                           # Dynamic headers
-  body:                              # Request body mapping
-    defaults:                        # Implicit body values
-    bindings:                        # Flag → body field mappings
-  examples:                          # Usage examples for --help
+version: 1
+commands:
+  - id: calendar.events.create        # Unique dot-separated identifier
+    command: calendar events create    # CLI invocation path
+    summary: 创建日程                   # One-line description
+    description: ...                   # Extended help text
+    method: POST                       # HTTP method
+    path: /v7/calendars/{calendar_id}/events/create
+    request_schema_ref: "#/components/schemas/..."   # Optional: OpenAPI request body schema ref
+    response_schema_ref: "#/components/schemas/..."   # OpenAPI response schema ref
+    args:                              # Positional arguments
+    flags:                             # Named flags
+    headers:                           # Dynamic headers
+    body:                              # Request body mapping
+      defaults:                        # Implicit body values
+      bindings:                        # Flag → body field mappings
+    examples:                          # Usage examples for --help
 ```
 
 ### Key Design Decisions
@@ -231,12 +233,12 @@ Current stats (v0.1.0):
 |--------|-----------------|-----------|
 | Calendar | 28 | ~35 |
 | IM | 20 | ~25 |
-| User | 9 | ~12 |
-| Mail | 11 | ~15 |
+| User | 9 | ~10 |
+| Mail | 11 | ~12 |
 | Drive | 29 | ~40 |
 | DbSheet | 22 | ~30 |
 | Meeting | 33 | ~45 |
-| **Total** | **152** | **~200** |
+| **Total** | **152** | **~197** |
 
 The remaining ~600 API paths are accessible via `api get|post`. Curation is an ongoing process — high-traffic endpoints are prioritized.
 
