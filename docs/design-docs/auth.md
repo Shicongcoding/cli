@@ -4,12 +4,13 @@
 
 ## 认证模式
 
-wps365-cli 支持两种认证模式，命令根据底层 OpenAPI 的 `security` 声明自动选择，`--token-type` 可显式覆盖。模式不兼容时直接报错，不静默切换。
+wps365-cli 支持三种认证模式，命令根据底层 OpenAPI 的 `security` 声明自动选择，`--token-type` 可显式覆盖。模式不兼容时直接报错，不静默切换。
 
-| 模式 | OAuth 授权类型 | 适用场景 | 获取方式 |
-|------|------------|---------|---------|
-| `delegated` | Authorization Code（浏览器授权） | 当前用户信息、个人日历、个人邮件等用户态接口 | `auth login --scopes "kso.user_base.read,kso.calendar.read"` |
+| 模式 | 授权类型 | 适用场景 | 获取方式 |
+|------|---------|---------|---------|
+| `delegated` | OAuth Authorization Code（浏览器授权） | 当前用户信息、个人日历、个人邮件等用户态接口 | `auth login --scopes "kso.user_base.read,kso.calendar.read"` |
 | `app` | Client Credentials | 服务端调用、组织级管理、应用态接口 | `auth login --app` |
+| `osh` | OSH 网关 Token | 通过 OSH 网关访问开放能力 | `auth login --osh` |
 
 ### Delegated 模式流程
 
@@ -21,9 +22,15 @@ wps365-cli 支持两种认证模式，命令根据底层 OpenAPI 的 `security` 
 
 ### App 模式流程
 
-1. CLI 使用 `client_id` + `client_secret` 直接请求 token endpoint
+1. CLI 使用 `client_id` + `client_secret` 请求 `https://openapi.wps.cn/oauth2/token`
 2. 返回 `access_token`（无 `refresh_token`，过期后重新获取）
 3. 适用于 CI/CD 和服务端场景，支持非交互式
+
+### OSH 模式流程
+
+1. CLI 使用 `client_id` + `client_secret` 请求 `https://open.wps.cn/osh/api/v1/consumers/token`
+2. 返回 OSH 网关 access token，用于访问 OSH 开放能力
+3. 与 app 模式类似，无 `refresh_token`，过期后重新获取
 
 ### 非交互式（CI/CD）
 
@@ -34,6 +41,16 @@ wps365-cli auth login --app
 ```
 
 通过环境变量注入凭证，跳过交互式 `auth setup`。
+
+### 自定义回调地址
+
+Delegated 模式默认回调地址为 `http://localhost:18365/callback`。如果需要自定义（如远程开发环境端口转发），可通过 `--redirect-uri` 覆盖：
+
+```bash
+wps365-cli auth login --scopes "kso.user_base.read" --redirect-uri "http://myhost:18365/callback"
+```
+
+> 自定义回调地址必须已在 WPS 365 开放平台「安全设置」中注册。
 
 ## 凭证存储
 
@@ -57,15 +74,17 @@ wps365-cli auth login --app
 
 `WPS365_ACCESS_TOKEN` 环境变量可直接注入 access token，跳过存储和刷新逻辑。适用于已有 token 的外部集成场景。
 
+`WPS365_OSH_TOKEN` 环境变量可直接注入 OSH 网关 token，效果类似。
+
 ## Token 生命周期
 
 ### 自动刷新策略
 
-| 事件 | Delegated 模式 | App 模式 |
-|------|-----------|-----|
-| 过期前 10 秒 | 使用 `refresh_token` 刷新 | 使用 `client_credentials` 重新获取 |
-| 收到 401 响应 | 透明刷新 + 重试 | 透明重新获取 + 重试 |
-| Refresh token 过期 | 提示重新执行 `auth login` | 不适用（无 refresh token） |
+| 事件 | Delegated 模式 | App 模式 | OSH 模式 |
+|------|-----------|-----|------|
+| 过期前 10 秒 | 使用 `refresh_token` 刷新 | 使用 `client_credentials` 重新获取 | 使用 `client_credentials` 重新获取 |
+| 收到 401 响应 | 透明刷新 + 重试 | 透明重新获取 + 重试 | 透明重新获取 + 重试 |
+| Refresh token 过期 | 提示重新执行 `auth login` | 不适用 | 不适用 |
 
 ### 手动操作
 
