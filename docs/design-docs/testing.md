@@ -99,8 +99,9 @@ wps365-cli -o tsv calendar list | cut -f2
 |--------|------|
 | 0 | 成功 |
 | 1 | 一般错误 |
+| 2 | 参数错误（无效 flag、缺少必需参数等） |
 | 5 | 未登录 / 认证失败 |
-| 其他 | 特定业务错误 |
+| 7 | 网络错误（连接超时、DNS 解析失败等） |
 
 脚本可通过退出码判断命令是否成功，无需解析输出。
 
@@ -156,6 +157,56 @@ wps365-cli -o json user me | jq '.data.user_id'
 - 使用专门的测试应用，避免污染生产数据
 - 每次测试后清理创建的资源
 - 记录请求与响应用于回归比对
+
+#### 幂等测试模式
+
+对于写入接口，可采用"创建-验证-删除"模式确保测试不留下残留数据：
+
+```bash
+# 创建日程
+EVENT_ID=$(wps365-cli -o json calendar events create primary \
+  --name "测试日程" --from "2024-01-15T14:00:00+08:00" --to "2024-01-15T15:00:00+08:00" \
+  | jq -r '.data.event_id')
+
+# 验证日程存在
+wps365-cli calendar events get primary "$EVENT_ID"
+
+# 清理：删除测试日程
+wps365-cli calendar events delete primary "$EVENT_ID"
+```
+
+此模式要求删除接口可用。若接口不支持删除（如发送消息），则应在专门的测试群聊中执行，并标记测试数据以便后续人工清理。
+
+### CI/CD 集成示例
+
+以下 GitHub Actions 工作流展示如何在 PR 中自动验证文档引用的命令参数是否正确：
+
+```yaml
+name: CLI dry-run validation
+on: pull_request
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install wps365-cli
+        run: curl -fsSL https://raw.githubusercontent.com/wps365-open/cli/main/install.sh | bash
+      - name: Login as app
+        env:
+          WPS365_CLIENT_ID: ${{ secrets.WPS365_CLIENT_ID }}
+          WPS365_CLIENT_SECRET: ${{ secrets.WPS365_CLIENT_SECRET }}
+        run: wps365-cli auth login --app
+      - name: Validate calendar command
+        run: |
+          wps365-cli --dry-run -o json calendar events create primary \
+            --name "CI test" --from "2024-01-15T14:00:00+08:00" \
+            --to "2024-01-15T15:00:00+08:00" \
+            | jq -e '.method == "POST" and (.path | contains("/v7/calendars/primary/events/create"))'
+      - name: Validate user command
+        run: |
+          wps365-cli --dry-run -o json user me \
+            | jq -e '.method == "GET" and (.path == "/v7/users/current")'
+```
 
 ## 文档贡献的测试
 
