@@ -203,6 +203,8 @@ done
 
 ### Dry-run 断言示例
 
+以下示例使用 `jq -e`，其中 `-e` 标志表示当表达式结果为 `false` 或 `null` 时 jq 以退出码 1 退出，便于脚本断言失败时中断。
+
 ```bash
 # 断言请求方法
 wps365-cli --dry-run -o json calendar events create primary \
