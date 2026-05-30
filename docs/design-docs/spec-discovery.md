@@ -144,9 +144,60 @@ wps365-cli spec update
 - 为团队内部接口创建专用命令
 - 调整官方命令的默认参数或 body 绑定
 
+### 自定义 API spec 格式要求
+
+`spec/api/customs/` 下的文件必须符合 OpenAPI 3.0 规范。只需定义需要覆盖或补充的 paths，不需要重复官方 spec 中已有的内容。
+
+示例——补充一个内部接口：
+
+```yaml
+openapi: "3.0.0"
+info:
+  title: Custom API extensions
+  version: "1.0"
+paths:
+  /v7/internal/reports:
+    get:
+      summary: 获取内部报表
+      operationId: getInternalReport
+      responses:
+        "200":
+          description: 成功
+```
+
+### 自定义精装目录格式要求
+
+`spec/curated/customs/` 下的文件必须遵循精装目录格式：
+
+```yaml
+version: 1
+commands:
+  - id: my.resource.action
+    command: my resource action
+    summary: 我的自定义命令
+    method: GET
+    path: /v7/my/resource
+    args: []
+    flags:
+      - name: verbose
+        type: bool
+        required: false
+        to: query.verbose
+    body:
+      bindings: []
+    examples:
+      - command: 'wps365-cli my resource action --verbose'
+```
+
+关键字段：
+- `version` 必须为 `1`
+- `id` 在所有目录中必须唯一，冲突时 customs 优先
+- `command` 定义 CLI 命令路径（空格分隔资源层级）
+- `body.bindings` 的 `transform` 支持：`split_csv`、`to_int`、`to_bool`、`parse_json`、`trim`、`wrap`、`negate`
+
 ### 合并优先级
 
-当官方 spec 与 customs 存在相同 ID 的定义时，customs 中的定义优先。多个 customs 文件存在相同 ID 时，按文件名字典序排列，后者覆盖前者。
+当官方 spec 与 customs 存在相同 ID 的定义时，customs 中的定义整体替换官方定义（非字段级合并）。多个 customs 文件存在相同 ID 时，按文件名字典序排列，后者覆盖前者。
 
 完整优先级（从低到高）：
 
@@ -155,6 +206,9 @@ wps365-cli spec update
 | 1 | 内嵌 spec | 编译到二进制中的官方 spec |
 | 2 | 本地官方 spec | `spec/api/365.yaml` / `spec/curated/365.yaml` |
 | 3 | 自定义 spec | `customs/` 目录中的文件，按文件名字典序 |
+
+- **精装目录**：以 `id` 为键，customs 中的命令整体替换同 id 的官方命令（非字段级合并）
+- **API 规范**：以 path 为键，customs 中的 path 定义覆盖同 path 的官方定义（path 级替换，非字段级合并）
 
 ### 自定义精装命令编写格式
 
@@ -169,8 +223,6 @@ commands:
     description: 部署完成后向指定用户发送 IM 通知
     method: POST
     path: /v7/messages/batch_create
-    request_schema_ref: "#/components/schemas/batch_create_messages_req_body"
-    response_schema_ref: "#/components/schemas/batch_create_messages_resp_body"
     flags:
       - name: to
         type: string[]
@@ -283,6 +335,8 @@ Error: API returned 404 for POST /v7/calendars/{calendar_id}/events/create
 | `WPS365_SPEC_AUTO_DOWNLOAD` | `true` | 是否自动下载缺失的 spec |
 | `WPS365_SPEC_BASE_URL` | `https://open.wps.cn/cli/specs/v1` | spec 远程下载地址 |
 | `WPS365_CONFIG_DIR` | 系统默认 | 配置目录（含 spec 子目录） |
+
+> **注意区分**：`WPS365_SPEC_BASE_URL` 控制 spec 文件的下载源（YAML 规范文件从哪里拉取），而 `WPS365_API_BASE` 控制 API 请求的目标端点（运行时 HTTP 请求发往哪里）。两者相互独立——可以使用官方 spec 描述文件，同时将 API 请求指向内部测试环境。
 
 ## 实现包
 
