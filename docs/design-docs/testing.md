@@ -178,3 +178,81 @@ grep -roP '\[.*?\]\(([^)]+)\)' docs/ README.md | \
     [ -f "$target" ] || echo "BROKEN: $link"
   done
 ```
+
+### Spec 完整性检查
+
+验证精装命令引用的路径和 schema 在 API spec 中均存在：
+
+```bash
+# 验证所有精装命令的 path 在 API spec 中存在
+grep -oP 'path: \K.*' spec/curated/365.yaml | sort -u | while read -r p; do
+  escaped_path=$(echo "$p" | sed 's/{[^}]*}/[^\/]+/g')
+  if ! grep -qP "^\s+\"?$escaped_path\"?:" spec/api/365.yaml; then
+    echo "BROKEN PATH: $p"
+  fi
+done
+
+# 验证 schema 引用指向存在的组件
+grep -oP '(request|response)_schema_ref: \K.*' spec/curated/365.yaml | sort -u | while read -r ref; do
+  component=$(echo "$ref" | sed 's|#/components/schemas/||')
+  if ! grep -qP "^\s+${component}:" spec/api/365.yaml; then
+    echo "BROKEN SCHEMA: $ref"
+  fi
+done
+```
+
+### Dry-run 断言示例
+
+```bash
+# 断言请求方法
+wps365-cli --dry-run -o json calendar events create primary \
+  --name "测试" --from "2024-01-15T14:00:00+08:00" --to "2024-01-15T15:00:00+08:00" \
+  | jq -e '.method == "POST"'
+
+# 断言 transform 结果
+wps365-cli --dry-run -o json calendar events create primary \
+  --name "测试" --from "2024-01-15T14:00:00+08:00" --to "2024-01-15T15:00:00+08:00" \
+  --reminders "30,10" \
+  | jq -e '.body.reminders | length == 2'
+
+# 断言默认值注入
+wps365-cli --dry-run -o json im messages send \
+  --to ou_abc --text "hello" \
+  | jq -e '.body | {type, "receivers_type": .receivers[0].type}'
+# 期望: {"type": "text", "receivers_type": "user"}
+```
+
+## CI/CD 集成
+
+### GitHub Actions 示例
+
+```yaml
+name: CLI 冒烟测试
+on: [push, pull_request]
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 wps365-cli
+        run: curl -fsSL https://raw.githubusercontent.com/wps365-open/cli/main/install.sh | bash
+      - name: 配置应用凭证
+        env:
+          WPS365_CLIENT_ID: ${{ secrets.WPS365_CLIENT_ID }}
+          WPS365_CLIENT_SECRET: ${{ secrets.WPS365_CLIENT_SECRET }}
+        run: wps365-cli auth login --app
+      - name: Dry-run 冒烟测试
+        run: |
+          wps365-cli --dry-run user me
+          wps365-cli --dry-run calendar list
+          wps365-cli --dry-run api get "/v7/users/current"
+      - name: 验证 spec 完整性
+        run: |
+          SPEC_DIR=$(wps365-cli spec path)
+          grep -oP 'path: \K.*' "$SPEC_DIR/curated/365.yaml" | sort -u | while read -r p; do
+            escaped_path=$(echo "$p" | sed 's/{[^}]*}/[^\/]+/g')
+            if ! grep -qP "^\s+\"?$escaped_path\"?:" "$SPEC_DIR/api/365.yaml"; then
+              echo "BROKEN: $p not found in API spec" && exit 1
+            fi
+          done
+```

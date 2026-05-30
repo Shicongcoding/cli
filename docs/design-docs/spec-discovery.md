@@ -146,7 +146,84 @@ wps365-cli spec update
 
 ### 合并优先级
 
-当官方 spec 与 customs 存在相同 ID 的定义时，customs 中的定义优先。
+当官方 spec 与 customs 存在相同 ID 的定义时，customs 中的定义优先。多个 customs 文件存在相同 ID 时，按文件名字典序排列，后者覆盖前者。
+
+完整优先级（从低到高）：
+
+| 优先级 | 来源 | 说明 |
+|--------|------|------|
+| 1 | 内嵌 spec | 编译到二进制中的官方 spec |
+| 2 | 本地官方 spec | `spec/api/365.yaml` / `spec/curated/365.yaml` |
+| 3 | 自定义 spec | `customs/` 目录中的文件，按文件名字典序 |
+
+### 自定义精装命令编写格式
+
+customs 目录中的 YAML 文件与官方精装目录格式相同：
+
+```yaml
+version: 1
+commands:
+  - id: myteam.deploy.notify
+    command: myteam deploy notify
+    summary: 部署完成通知
+    description: 部署完成后向指定用户发送 IM 通知
+    method: POST
+    path: /v7/messages/batch_create
+    request_schema_ref: "#/components/schemas/batch_create_messages_req_body"
+    response_schema_ref: "#/components/schemas/batch_create_messages_resp_body"
+    flags:
+      - name: to
+        type: string[]
+        required: true
+        description: 接收人 open_id 列表
+      - name: text
+        type: string
+        required: true
+        description: 通知内容
+    body:
+      defaults:
+        type: text
+        receivers[0].type: user
+        content.text.type: plain
+      bindings:
+        - from_flag: to
+          to: receivers[0].receiver_ids
+        - from_flag: text
+          to: content.text.content
+    examples:
+      - command: 'wps365-cli myteam deploy notify --to ou_abc --text "v2.3 已上线"'
+        description: 部署完成后发送通知
+```
+
+编写规则：
+
+1. **`id` 全局唯一** — 官方命令使用 `{domain}.{resource}.{verb}` 格式。自定义命令建议加组织前缀（如 `myteam.`）避免与官方冲突。
+2. **`path` 必须存在于 API spec** — 如果是内部 API，需同时在 `spec/api/customs/` 中添加对应路径定义。
+3. **`method` 必须与 API spec 一致** — GET 路径写 POST 会运行时报错。
+4. **body 绑定使用点记法** — `content.text.content` 对应 JSON 嵌套层级。
+5. **数组索引从 0 开始** — `receivers[0].receiver_ids` 对应第一个数组元素。
+6. **transform 支持 pipe 组合** — 详见 [curated-commands.md](curated-commands.md) 的 Transform Pipeline 章节。
+7. **`request_schema_ref` 和 `response_schema_ref` 可选** — 非所有命令都有 schema 引用，但推荐添加以增强 `--help` 输出的参数说明。
+
+### 覆盖官方命令
+
+在 customs 文件中使用与官方命令相同的 `id`，即可覆盖其定义：
+
+```yaml
+version: 1
+commands:
+  - id: calendar.list
+    command: calendar list
+    summary: 查询日历列表（默认50条）
+    method: GET
+    path: /v7/calendars
+    flags:
+      - name: page-size
+        type: integer
+        default: 50    # 覆盖官方默认值 20
+        description: 每页返回的日历数量
+        to: query.page_size
+```
 
 ## OSH 网关 Spec
 
@@ -158,6 +235,46 @@ OSH（企业网关）模式的 spec 处理与标准模式不同：
 - 由 `loadOshCatalog` 加载
 
 OSH spec 的下载受 OSH 认证状态控制，仅在 `auth login --osh` 后才可获取。
+
+## 调试与排查
+
+### 命令未找到
+
+```
+Error: unknown command "calendar events create"
+```
+
+排查步骤：
+1. `wps365-cli spec status` — 确认 curated spec 存在且来源正确
+2. `wps365-cli calendar --help` — 检查已注册的子命令
+3. 若自定义 spec 未生效，检查 `id` 是否拼写正确、文件名排序是否靠后
+
+### 请求路径 404
+
+```
+Error: API returned 404 for POST /v7/calendars/{calendar_id}/events/create
+```
+
+排查步骤：
+1. 确认 API spec 中存在该路径：`grep "/v7/calendars" spec/api/365.yaml`
+2. 确认 `method` 是否正确
+3. 运行 `spec update` 确保是最新 spec
+
+### Body 映射不生效
+
+排查步骤：
+1. 使用 `--dry-run -o json` 查看实际构造的请求体
+2. 检查 `to:` 字段的点记法是否与 API schema 匹配
+3. 检查 transform 是否正确（如 `parse_json` 需要合法 JSON 输入）
+4. 检查 `defaults` 中是否有覆盖 flag 绑定的值
+
+### 自定义 spec 未被加载
+
+排查步骤：
+1. `wps365-cli spec status` — 确认 `custom_count` 不为 0
+2. 确认文件在正确目录（`customs/` 而非根 spec 目录）
+3. 确认文件格式为合法 YAML（注意缩进和 `version: 1` 顶层声明）
+4. 多个 customs 文件存在同名命令时，文件名字典序靠后的优先
 
 ## 环境变量速查
 
